@@ -5,18 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>工作日排期计算器</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f4f9; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f4f9; display: flex; justify-content: center; align-items: flex-start; padding-top: 5vh; min-height: 95vh; margin: 0; }
+        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 100%; max-width: 450px; }
         h2 { text-align: center; color: #333; margin-top: 0; }
         .form-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 5px; color: #666; font-weight: bold;}
         input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; font-size: 16px; }
-        button { width: 100%; padding: 12px; background-color: #0070f3; color: white; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; transition: background 0.3s;}
-        button:hover { background-color: #005bb5; }
-        .result-box { margin-top: 20px; padding: 15px; background: #eef2f5; border-radius: 5px; display: none; }
+        button.primary-btn { width: 100%; padding: 12px; background-color: #0070f3; color: white; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; transition: background 0.3s; margin-bottom: 10px;}
+        button.primary-btn:hover { background-color: #005bb5; }
+        .result-box { margin-top: 15px; padding: 15px; background: #eef2f5; border-radius: 5px; display: none; }
         .result-box p { margin: 8px 0; color: #333; font-size: 15px; }
         .result-box span { font-weight: bold; color: #0070f3; }
         .error { color: red; margin-top: 10px; text-align: center; display: none; }
+        
+        /* 历史记录样式 */
+        .history-section { margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px; }
+        .history-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .history-header h3 { margin: 0; font-size: 16px; color: #444; }
+        .clear-btn { background: none; border: none; color: #999; cursor: pointer; font-size: 14px; padding: 0; }
+        .clear-btn:hover { color: #d93025; text-decoration: underline; }
+        .history-list { list-style: none; padding: 0; margin: 0; font-size: 14px; }
+        .history-item { background: #fafafa; border: 1px solid #eee; padding: 10px; border-radius: 5px; margin-bottom: 8px; display: flex; flex-direction: column; position: relative; }
+        .history-item .tag { display: inline-block; background: #e0f0ff; color: #0070f3; padding: 2px 6px; border-radius: 3px; font-size: 12px; margin-bottom: 4px; width: fit-content; }
+        .history-item .details { color: #555; }
     </style>
 </head>
 <body>
@@ -31,7 +42,7 @@
         <label for="days">所需工作日 (天)</label>
         <input type="number" id="days" min="1" placeholder="例如: 5" required>
     </div>
-    <button onclick="calculate()">开始计算</button>
+    <button class="primary-btn" onclick="calculate()">开始计算</button>
 
     <div id="errorMsg" class="error"></div>
 
@@ -39,16 +50,28 @@
         <p>截止日期：<span id="resEnd"></span></p>
         <p>下个工作日：<span id="resNext"></span></p>
     </div>
+
+    <div class="history-section" id="historySection" style="display: none;">
+        <div class="history-header">
+            <h3>最近计算记录</h3>
+            <button class="clear-btn" onclick="clearHistory()">清空记录</button>
+        </div>
+        <ul class="history-list" id="historyList"></ul>
+    </div>
 </div>
 
 <script>
+    const MAX_HISTORY = 10; // 最多保留 10 条记录
+
+    // 页面加载时初始化历史记录
+    document.addEventListener('DOMContentLoaded', renderHistory);
+
     async function calculate() {
         const startDate = document.getElementById('startDate').value;
         const days = parseInt(document.getElementById('days').value);
         const resultBox = document.getElementById('resultBox');
         const errorMsg = document.getElementById('errorMsg');
 
-        // 隐藏之前的结果和错误
         resultBox.style.display = 'none';
         errorMsg.style.display = 'none';
 
@@ -71,13 +94,70 @@
                 throw new Error(data.detail || '计算失败');
             }
 
+            // 显示结果
             document.getElementById('resEnd').innerText = data.end_date;
             document.getElementById('resNext').innerText = data.next_workday;
             resultBox.style.display = 'block';
             
+            // 将成功的结果存入历史记录
+            saveHistory({
+                start: startDate,
+                days: days,
+                end: data.end_date,
+                next: data.next_workday,
+                timestamp: new Date().getTime() // 记录时间戳用于排序或追溯
+            });
+
         } catch (error) {
             errorMsg.innerText = error.message;
             errorMsg.style.display = 'block';
+        }
+    }
+
+    // 保存记录到 LocalStorage
+    function saveHistory(record) {
+        let history = JSON.parse(localStorage.getItem('workday_history')) || [];
+        // 把新记录插到数组最前面
+        history.unshift(record);
+        // 如果超过最大数量，截断数组
+        if (history.length > MAX_HISTORY) {
+            history = history.slice(0, MAX_HISTORY);
+        }
+        localStorage.setItem('workday_history', JSON.stringify(history));
+        renderHistory();
+    }
+
+    // 渲染历史记录列表
+    function renderHistory() {
+        const history = JSON.parse(localStorage.getItem('workday_history')) || [];
+        const historySection = document.getElementById('historySection');
+        const historyList = document.getElementById('historyList');
+
+        if (history.length === 0) {
+            historySection.style.display = 'none';
+            return;
+        }
+
+        historySection.style.display = 'block';
+        historyList.innerHTML = '';
+
+        history.forEach(item => {
+            const li = document.createElement('li');
+            li.className = 'history-item';
+            // 拼接显示的文案
+            li.innerHTML = `
+                <span class="tag">${item.start} ➕ ${item.days} 天</span>
+                <div class="details">截止: <strong>${item.end}</strong> | 下个工作日: <strong>${item.next}</strong></div>
+            `;
+            historyList.appendChild(li);
+        });
+    }
+
+    // 清空历史记录
+    function clearHistory() {
+        if (confirm('确定要清空所有计算记录吗？')) {
+            localStorage.removeItem('workday_history');
+            renderHistory();
         }
     }
 </script>
