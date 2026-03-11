@@ -15,3 +15,10 @@ Vercel 部署 (前后端分离的 Serverless 架构)
 将 Python 脚本用 FastAPI 或 Flask 包装成 API 接口，放在项目的 /api 目录下。
 
 框架: 前端 html + 后端 python + fastapi  Serverless 
+
+### 本地运行方式 -- 使用 Vercel CLI
+```bash
+npm i -g vercel
+vercel dev
+```
+启动后，它会在本地 localhost:3000 完美模拟 Vercel 的线上环境，前后端路由自动生效，你修改代码保存后还会热更新！
